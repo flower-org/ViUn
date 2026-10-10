@@ -1,0 +1,3 @@
+rootProject.name = 'ViUn'
+include 'ViUnCore'
+include 'ViUnMySql'
