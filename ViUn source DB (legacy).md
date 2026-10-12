@@ -5,6 +5,7 @@
 ```mermaid
 erDiagram
     UNIONS ||--o{ ELEMENTS : contains
+    UNIONS ||--o{ GRAPHS : contains
     UNIONS {
         bigint id_union PK
         enum singleton_keeper UK
@@ -65,6 +66,7 @@ erDiagram
         bigint last_version
         bigint last_delete_version
         bigint id_graph_element FK
+        bigint id_union FK
     }
 
     LINKS {
