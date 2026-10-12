@@ -4,6 +4,7 @@
 
 ```mermaid
 erDiagram
+    UNIONS ||--|| ELEMENTS : "has_union_element"
     UNIONS ||--o{ ELEMENTS : contains
     UNIONS ||--o{ GRAPHS : contains
     UNIONS {
@@ -59,6 +60,7 @@ erDiagram
         bigint id_element FK "inherits from ELEMENTS"
     }
 
+    GRAPHS ||--|| ELEMENTS : "has_graph_element"
     GRAPHS ||--o{ LINKS : contains
     GRAPHS {
         bigint id_graph PK
