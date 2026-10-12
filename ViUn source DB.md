@@ -72,6 +72,5 @@ erDiagram
         bigint id_subgraph FK
         bigint id_element FK
         bool is_tombstone
-        note "UK: (id_subgraph, id_element)"
     }
 ```
