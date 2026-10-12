@@ -31,6 +31,7 @@ erDiagram
         bigint sync
     }
 
+    VERTEX_TYPES ||--o{ VERTEXES : "defines"
     VERTEX_TYPES {
         bigint id_vertex_type PK
         varchar type_name UK
@@ -51,6 +52,7 @@ erDiagram
         bigint id_element FK "inherits from ELEMENTS"
     }
 
+    EDGE_TYPES ||--o{ EDGES : "defines"
     EDGES {
         bigint id_edge PK
         bigint id_edge_type FK
