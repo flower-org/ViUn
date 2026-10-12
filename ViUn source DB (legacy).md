@@ -4,15 +4,15 @@
 
 ```mermaid
 erDiagram
-    GRAPHS ||--o{ ELEMENTS : contains
-    GRAPHS {
-        bigint id_graph PK
+    UNIONS ||--o{ ELEMENTS : contains
+    UNIONS {
+        bigint id_union PK
         enum singleton_keeper UK
-        varchar graph_name UK
-        bigint subgraph_delete_version
+        varchar union_name UK
+        bigint graph_delete_version
         bool destroyed
         bigint destroy_revive_version
-        bigint id_graph_element FK
+        bigint id_union_element FK
     }
 
     ELEMENTS ||--o{ VERTEX_TYPES : "inherits"
@@ -25,7 +25,7 @@ erDiagram
         varchar key UK
         text content
         bigint version UK
-        bigint id_graph FK
+        bigint id_union FK
         bigint sync
     }
 
@@ -58,18 +58,18 @@ erDiagram
         bigint id_element FK "inherits from ELEMENTS"
     }
 
-    SUBGRAPHS ||--o{ LINKS : contains
-    SUBGRAPHS {
-        bigint id_subgraph PK
-        varchar subgraph_name
+    GRAPHS ||--o{ LINKS : contains
+    GRAPHS {
+        bigint id_graph PK
+        varchar graph_name
         bigint last_version
         bigint last_delete_version
-        bigint id_subgraph_element FK
+        bigint id_graph_element FK
     }
 
     LINKS {
         bigint id_link PK
-        bigint id_subgraph FK
+        bigint id_graph FK
         bigint id_element FK
         bool is_tombstone
     }
