@@ -46,6 +46,7 @@ erDiagram
 
     EDGE_TYPES {
         bigint id_edge_type PK "inherits from ELEMENTS"
+        bool is_directed
     }
 
     EDGE_TYPES ||--o{ EDGES : "defines"
