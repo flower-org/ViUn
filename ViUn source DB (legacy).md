@@ -34,33 +34,29 @@ erDiagram
 
     VERTEX_TYPES ||--o{ VERTEXES : "defines"
     VERTEX_TYPES {
-        bigint id_vertex_type PK
+        bigint id_vertex_type PK "inherits from ELEMENTS"
         varchar type_name UK
-        bigint id_element FK "inherits from ELEMENTS"
     }
 
     VERTEXES ||--o{ EDGES : "from"
     VERTEXES ||--o{ EDGES : "to"
     VERTEXES {
-        bigint id_vertex PK
+        bigint id_vertex PK "inherits from ELEMENTS"
         bigint id_vertex_type FK
-        bigint id_element FK "inherits from ELEMENTS"
     }
 
     EDGE_TYPES {
-        bigint id_edge_type PK
+        bigint id_edge_type PK "inherits from ELEMENTS"
         varchar type_name UK
-        bigint id_element FK "inherits from ELEMENTS"
     }
 
     EDGE_TYPES ||--o{ EDGES : "defines"
     EDGES {
-        bigint id_edge PK
+        bigint id_edge PK "inherits from ELEMENTS"
         bigint id_edge_type FK
         bigint id_vertex_from FK
         bigint id_vertex_to FK
         bool is_directed
-        bigint id_element FK "inherits from ELEMENTS"
     }
 
     GRAPHS ||--|| ELEMENTS : "has_graph_element"
@@ -74,7 +70,6 @@ erDiagram
         bigint id_union FK
     }
 
-    ELEMENTS ||--o{ LINKS : "inherits"
     LINKS {
         bigint id_link PK "inherits from ELEMENTS"
         bigint id_graph FK
