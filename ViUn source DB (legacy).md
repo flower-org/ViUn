@@ -11,11 +11,11 @@ erDiagram
         bigint id_union PK
         enum singleton_keeper UK
         varchar union_name UK
-        bool destroyed
+        bool is_tombstone
         bigint id_union_metadata_element FK
         bigint last_element_update_version
         bigint last_graph_sync_version
-        bigint destroy_revive_version
+        bigint tombstone_revive_version
     }
 
     ELEMENTS ||--o{ VERTEX_TYPES : "inherits"
@@ -64,9 +64,11 @@ erDiagram
         bigint id_graph PK
         bigint id_union FK
         varchar graph_name
+        bool is_tombstone
         bigint id_graph_metadata_element FK
         bigint last_element_update_version
         bigint last_link_sync_version
+        bigint tombstone_revive_version
     }
 
     LINKS {
