@@ -35,7 +35,6 @@ erDiagram
     VERTEX_TYPES ||--o{ VERTEXES : "defines"
     VERTEX_TYPES {
         bigint id_vertex_type PK "inherits from ELEMENTS"
-        varchar type_name UK
     }
 
     VERTEXES ||--o{ EDGES : "from"
@@ -47,7 +46,6 @@ erDiagram
 
     EDGE_TYPES {
         bigint id_edge_type PK "inherits from ELEMENTS"
-        varchar type_name UK
     }
 
     EDGE_TYPES ||--o{ EDGES : "defines"
