@@ -21,6 +21,7 @@ erDiagram
     ELEMENTS ||--o{ VERTEXES : "inherits"
     ELEMENTS ||--o{ EDGE_TYPES : "inherits"
     ELEMENTS ||--o{ EDGES : "inherits"
+    ELEMENTS ||--o{ LINKS : "inherits"
     ELEMENTS ||--o{ LINKS : references
     ELEMENTS {
         bigint id_element PK
@@ -73,8 +74,9 @@ erDiagram
         bigint id_union FK
     }
 
+    ELEMENTS ||--o{ LINKS : "inherits"
     LINKS {
-        bigint id_link PK
+        bigint id_link PK "inherits from ELEMENTS"
         bigint id_graph FK
         bigint id_element FK
         bool is_tombstone
