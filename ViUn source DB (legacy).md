@@ -4,7 +4,7 @@
 
 ```mermaid
 erDiagram
-    UNIONS ||--|| ELEMENTS : "has_union_element"
+    UNIONS ||--|| ELEMENTS : "has_union_metadata_element"
     UNIONS ||--o{ ELEMENTS : contains
     UNIONS ||--o{ GRAPHS : contains
     UNIONS {
@@ -14,7 +14,7 @@ erDiagram
         bigint graph_delete_version
         bool destroyed
         bigint destroy_revive_version
-        bigint id_union_element FK
+        bigint id_union_metadata_element FK
     }
 
     ELEMENTS ||--o{ VERTEX_TYPES : "inherits"
@@ -59,14 +59,14 @@ erDiagram
         bool is_directed
     }
 
-    GRAPHS ||--|| ELEMENTS : "has_graph_element"
+    GRAPHS ||--|| ELEMENTS : "has_graph_metadata_element"
     GRAPHS ||--o{ LINKS : contains
     GRAPHS {
         bigint id_graph PK
         varchar graph_name
         bigint last_version
         bigint last_delete_version
-        bigint id_graph_element FK
+        bigint id_graph_metadata_element FK
         bigint id_union FK
     }
 
