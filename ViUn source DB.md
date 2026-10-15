@@ -50,7 +50,7 @@ erDiagram
 
     EDGE_TYPES {
         bigint id_edge_type PK "inherits from ELEMENTS"
-        enum schema_type
+        enum singleton_keeper
         bool is_directed
     }
 
