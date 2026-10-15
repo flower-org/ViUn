@@ -38,6 +38,7 @@ erDiagram
     VERTEX_TYPES ||--o{ VERTEXES : "defines"
     VERTEX_TYPES {
         bigint id_vertex_type PK "inherits from ELEMENTS"
+        enum schema_type
     }
 
     VERTEXES ||--o{ EDGES : "from"
@@ -49,6 +50,7 @@ erDiagram
 
     EDGE_TYPES {
         bigint id_edge_type PK "inherits from ELEMENTS"
+        enum schema_type
         bool is_directed
     }
 
