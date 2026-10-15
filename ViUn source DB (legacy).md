@@ -11,7 +11,7 @@ erDiagram
         bigint id_union PK
         enum singleton_keeper UK
         varchar union_name UK
-        bigint graph_delete_version
+        bigint last_graph_sync_version
         bool destroyed
         bigint destroy_revive_version
         bigint id_union_metadata_element FK
@@ -62,7 +62,7 @@ erDiagram
         bigint id_graph PK
         varchar graph_name
         bigint last_version
-        bigint last_delete_version
+        bigint last_link_sync_version
         bigint id_graph_metadata_element FK
         bigint id_union FK
     }
