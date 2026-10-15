@@ -13,7 +13,7 @@ erDiagram
         varchar union_name UK
         bool destroyed
         bigint id_union_metadata_element FK
-        bigint last_element_update_version
+        bigint last_element_update_version V
         bigint last_graph_sync_version
         bigint destroy_revive_version
     }
