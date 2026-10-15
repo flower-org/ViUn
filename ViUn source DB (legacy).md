@@ -2,6 +2,9 @@
 
 ## Entity Relationship Diagram
 
+
+`UNION.last_graph_sync_version` is not needed because `UnionVersion` does graph sync every update
+
 ```mermaid
 erDiagram
     UNIONS ||--|| ELEMENTS : "has_union_metadata_element"
@@ -14,7 +17,6 @@ erDiagram
         bool is_tombstone
         bigint id_union_metadata_element FK
         bigint last_element_update_version
-        bigint last_graph_sync_version
         bigint tombstone_revive_version
     }
 
