@@ -54,7 +54,6 @@ erDiagram
         bigint id_edge_type FK
         bigint id_vertex_from FK
         bigint id_vertex_to FK
-        bool is_directed
     }
 
     GRAPHS ||--|| ELEMENTS : "has_graph_metadata_element"
