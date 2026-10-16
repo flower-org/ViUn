@@ -1,9 +1,9 @@
-package com.viun.core;
+package com.viun.core.model;
 
 import javax.annotation.Nullable;
 
 public interface Element<VERSION extends Comparable<VERSION>, ID> {
-    ID id();
+    ID elementId();
     VERSION version();
 
     @Nullable String key();
