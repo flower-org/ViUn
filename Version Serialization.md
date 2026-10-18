@@ -119,8 +119,9 @@ appear in any order.
 | `42; {items -> 3, tags -> 8}`                  | `42>items:3;tags:8`         |
 | `1; {"a:b" -> 2}` (name with delimiter)        | `1>a\:b:2`                  |
 
-An empty string is not a valid union version (a union version always has at least its version value).
-A graph entry without an unescaped `:` is malformed.
+An empty string is not a valid version.
+Each graph entry must separate the graph name from its version with a `:`; an entry lacking that
+separator is malformed.
 
 ### 3.2 Family Version
 
@@ -140,7 +141,8 @@ separator). Union entries may appear in any order.
 | `{orders -> 5; {items -> 3}}`                             | `orders:5>items:3`          |
 | `{a -> 1; {}, b -> 2; {g -> 9}}`                          | `a:1\|b:2>g:9`               |
 
-An empty string denotes an **empty** family version. An entry without an unescaped `:` is malformed.
+An empty string denotes an **empty** family version. An entry lacking the `:` that separates the union
+name from its union version is malformed.
 
 ### 3.3 Update Filter
 
@@ -160,7 +162,8 @@ and graph names may appear in any order.
 | `{orders -> {items}}`                                        | `orders>items`              |
 | `{orders -> {items, tags}, users -> {}}`                     | `orders>items;tags\|users`  |
 
-An empty string denotes an **empty** filter (no restriction). An entry with no unescaped `>` denotes a
+An empty string denotes an **empty** filter (no restriction). An entry that contains no `>` separator
+denotes a
 union with an empty graph set (all graphs). A trailing `>` with nothing after it (`unionName>`) means
 the same as the bare `unionName` — both are the empty graph set (all graphs). An entry whose union
 name or any listed graph name is empty is malformed.
@@ -181,8 +184,7 @@ Two operations define it:
 
 - **value → text.** Produces the text form of a version value. By default this is the value's natural
   text form. The result may contain any characters, including delimiters — the format escapes them.
-- **text → value.** Parses a version value from the text produced above. There is no universal
-  default; each version type must define it.
+- **text → value.** Parses a version value from the text produced above. There are no default values.
 
 **Correctness requirement.** Parsing the text form of any valid version value must reproduce that same
 value. For example, integer version values are written in decimal and read back as decimal integers.
@@ -208,7 +210,8 @@ survive the round-trip exactly.
 | union name  | `>`       | `u>x`    | `u\>x`       | yes         |
 | union name  | `\|`      | `u\|x`   | `u\\|x`      | yes         |
 
-The same holds for the backslash itself, in both names and version text.
+Each row reads **raw name → escaped form**: a backslash is inserted before the special character, and
+parsing removes it to recover the raw name. This applies in both names and version text.
 
 ---
 
