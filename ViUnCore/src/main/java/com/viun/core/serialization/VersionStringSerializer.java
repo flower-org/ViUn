@@ -27,13 +27,16 @@ import java.util.Set;
  */
 public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION>> {
     private static final char ESCAPE = '\\';
-    private static final char FAMILY_ENTRY_SEP = '|';
+    /** Between union entries (family version and update filter). */
+    private static final char UNION_ENTRY_SEP = '|';
+    /** Union name &rarr; serialized union version (family version). */
     private static final char FAMILY_NAME_VALUE_SEP = ':';
-    private static final char UNION_PART_SEP = ';';
+    /** Union part (version value / union name) &rarr; graph list (union version and update filter). */
+    private static final char GRAPH_LIST_SEP = '>';
+    /** Between graph entries/names (union version and update filter). */
+    private static final char GRAPH_ENTRY_SEP = ';';
+    /** Graph name &rarr; graph version (union version). */
     private static final char GRAPH_NAME_VALUE_SEP = ':';
-    private static final char FILTER_UNION_SEP = '|';
-    private static final char FILTER_GRAPH_SEP = ';';
-    private static final char FILTER_KEY_VALUE_SEP = ':';
 
     // ---------------------------------------------------------------------
     // Version conversion (overridable)
@@ -57,14 +60,15 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
     /**
      * Format: {@code unionName:unionVersionSerialized|unionName2:unionVersionSerialized2...}
      *
-     * <p>The nested union-version serialization is itself escaped, so its {@code ;} and {@code :}
-     * characters appear backslash-escaped within a family version.
+     * <p>The union name is escaped. The serialized union version is embedded verbatim after the first
+     * (unescaped) {@code :}; this is unambiguous because a serialized union version never contains an
+     * unescaped {@code |} (entry separator), and the union name contains no unescaped {@code :}.
      *
      * <p>Examples:
      * <ul>
      *     <li>{@code {}} (no unions) &rarr; {@code ""}</li>
-     *     <li>{@code {"orders" -> 5;{"items" -> 3}}} &rarr; {@code orders:5\;items\:3}</li>
-     *     <li>{@code {"a" -> 1;{}, "b" -> 2;{"g" -> 9}}} &rarr; {@code a:1|b:2\;g\:9}</li>
+     *     <li>{@code {"orders" -> 5;{"items" -> 3}}} &rarr; {@code orders:5>items:3}</li>
+     *     <li>{@code {"a" -> 1;{}, "b" -> 2;{"g" -> 9}}} &rarr; {@code a:1|b:2>g:9}</li>
      * </ul>
      */
     public String serializeFamilyVersion(FamilyVersion<VERSION> familyVersion) {
@@ -72,25 +76,25 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
         boolean first = true;
         for (Map.Entry<String, UnionVersion<VERSION>> entry : familyVersion.unionVersions().entrySet()) {
             if (!first) {
-                sb.append(FAMILY_ENTRY_SEP);
+                sb.append(UNION_ENTRY_SEP);
             }
             first = false;
-            sb.append(escape(entry.getKey()));
+            sb.append(escape(requireNonEmptyName(entry.getKey(), "union")));
             sb.append(FAMILY_NAME_VALUE_SEP);
-            sb.append(escape(serializeUnionVersion(entry.getValue())));
+            sb.append(serializeUnionVersion(entry.getValue()));
         }
         return sb.toString();
     }
 
     public FamilyVersion<VERSION> deserializeFamilyVersion(String value) {
         Map<String, UnionVersion<VERSION>> unionVersions = new LinkedHashMap<>();
-        for (String entry : splitUnescaped(value, FAMILY_ENTRY_SEP)) {
+        for (String entry : splitUnescaped(value, UNION_ENTRY_SEP)) {
             int sep = indexOfUnescaped(entry, FAMILY_NAME_VALUE_SEP);
             if (sep < 0) {
                 throw new IllegalArgumentException("Malformed family version entry: " + entry);
             }
-            String unionName = unescape(entry.substring(0, sep));
-            String unionVersion = unescape(entry.substring(sep + 1));
+            String unionName = requireNonEmptyName(unescape(entry.substring(0, sep)), "union");
+            String unionVersion = entry.substring(sep + 1);
             unionVersions.put(unionName, deserializeUnionVersion(unionVersion));
         }
         return new FamilyVersion<>(unionVersions);
@@ -101,23 +105,25 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
     // ---------------------------------------------------------------------
 
     /**
-     * Format: {@code unionVersion;graphName:graphVersion;graphName2:graphVersion2...}
-     * (the union version always comes first).
+     * Format: {@code unionVersion>graphName:graphVersion;graphName2:graphVersion2...}
+     * (the union version always comes first; {@code >} introduces the graph list).
      *
      * <p>Examples:
      * <ul>
      *     <li>{@code 7;{}} (no graphs) &rarr; {@code 7}</li>
-     *     <li>{@code 42;{"items" -> 3}} &rarr; {@code 42;items:3}</li>
-     *     <li>{@code 42;{"items" -> 3, "tags" -> 8}} &rarr; {@code 42;items:3;tags:8}</li>
-     *     <li>{@code 1;{"a:b" -> 2}} (name with delimiter) &rarr; {@code 1;a\:b:2}</li>
+     *     <li>{@code 42;{"items" -> 3}} &rarr; {@code 42>items:3}</li>
+     *     <li>{@code 42;{"items" -> 3, "tags" -> 8}} &rarr; {@code 42>items:3;tags:8}</li>
+     *     <li>{@code 1;{"a:b" -> 2}} (name with delimiter) &rarr; {@code 1>a\:b:2}</li>
      * </ul>
      */
     public String serializeUnionVersion(UnionVersion<VERSION> unionVersion) {
         StringBuilder sb = new StringBuilder();
         sb.append(escape(versionToString(unionVersion.unionVersion())));
+        boolean first = true;
         for (Map.Entry<String, VERSION> entry : unionVersion.graphVersions().entrySet()) {
-            sb.append(UNION_PART_SEP);
-            sb.append(escape(entry.getKey()));
+            sb.append(first ? GRAPH_LIST_SEP : GRAPH_ENTRY_SEP);
+            first = false;
+            sb.append(escape(requireNonEmptyName(entry.getKey(), "graph")));
             sb.append(GRAPH_NAME_VALUE_SEP);
             sb.append(escape(versionToString(entry.getValue())));
         }
@@ -125,21 +131,23 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
     }
 
     public UnionVersion<VERSION> deserializeUnionVersion(String value) {
-        List<String> parts = splitUnescaped(value, UNION_PART_SEP);
-        if (parts.isEmpty()) {
+        if (value.isEmpty()) {
             throw new IllegalArgumentException("Malformed union version: " + value);
         }
-        VERSION version = versionFromString(unescape(parts.get(0)));
+        int listSep = indexOfUnescaped(value, GRAPH_LIST_SEP);
+        String versionPart = listSep < 0 ? value : value.substring(0, listSep);
+        VERSION version = versionFromString(unescape(versionPart));
         Map<String, VERSION> graphVersions = new LinkedHashMap<>();
-        for (int i = 1; i < parts.size(); i++) {
-            String entry = parts.get(i);
-            int kv = indexOfUnescaped(entry, GRAPH_NAME_VALUE_SEP);
-            if (kv < 0) {
-                throw new IllegalArgumentException("Malformed graph version entry: " + entry);
+        if (listSep >= 0) {
+            for (String entry : splitUnescaped(value.substring(listSep + 1), GRAPH_ENTRY_SEP)) {
+                int kv = indexOfUnescaped(entry, GRAPH_NAME_VALUE_SEP);
+                if (kv < 0) {
+                    throw new IllegalArgumentException("Malformed graph version entry: " + entry);
+                }
+                String graphName = requireNonEmptyName(unescape(entry.substring(0, kv)), "graph");
+                VERSION graphVersion = versionFromString(unescape(entry.substring(kv + 1)));
+                graphVersions.put(graphName, graphVersion);
             }
-            String graphName = unescape(entry.substring(0, kv));
-            VERSION graphVersion = versionFromString(unescape(entry.substring(kv + 1)));
-            graphVersions.put(graphName, graphVersion);
         }
         return new UnionVersion<>(version, graphVersions);
     }
@@ -149,18 +157,18 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
     // ---------------------------------------------------------------------
 
     /**
-     * Format: {@code unionName:graphName;graphName2|unionName2:graphName3...}
+     * Format: {@code unionName>graphName;graphName2|unionName2>graphName3...}
      *
-     * <p>The colon and graph list are present only when the union restricts to specific graphs; a
+     * <p>The {@code >} and graph list are present only when the union restricts to specific graphs; a
      * union with an empty graph set (meaning "all graphs") is written as the bare union name.
      *
      * <p>Examples:
      * <ul>
      *     <li>{@code {}} (no restriction) &rarr; {@code ""}</li>
      *     <li>{@code {"orders" -> {}}} (all graphs of {@code orders}) &rarr; {@code orders}</li>
-     *     <li>{@code {"orders" -> {"items"}}} &rarr; {@code orders:items}</li>
+     *     <li>{@code {"orders" -> {"items"}}} &rarr; {@code orders>items}</li>
      *     <li>{@code {"orders" -> {"items", "tags"}, "users" -> {}}} &rarr;
-     *         {@code orders:items;tags|users}</li>
+     *         {@code orders>items;tags|users}</li>
      * </ul>
      */
     public static String serializeUpdateFilter(UpdateFilter filter) {
@@ -168,20 +176,20 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
         boolean first = true;
         for (Map.Entry<String, Set<String>> entry : filter.unionGraphNames().entrySet()) {
             if (!first) {
-                sb.append(FILTER_UNION_SEP);
+                sb.append(UNION_ENTRY_SEP);
             }
             first = false;
-            sb.append(escape(entry.getKey()));
+            sb.append(escape(requireNonEmptyName(entry.getKey(), "union")));
             Set<String> graphNames = entry.getValue();
             if (!graphNames.isEmpty()) {
-                sb.append(FILTER_KEY_VALUE_SEP);
+                sb.append(GRAPH_LIST_SEP);
                 boolean firstGraph = true;
                 for (String graphName : graphNames) {
                     if (!firstGraph) {
-                        sb.append(FILTER_GRAPH_SEP);
+                        sb.append(GRAPH_ENTRY_SEP);
                     }
                     firstGraph = false;
-                    sb.append(escape(graphName));
+                    sb.append(escape(requireNonEmptyName(graphName, "graph")));
                 }
             }
         }
@@ -190,17 +198,17 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
 
     public static UpdateFilter deserializeUpdateFilter(String value) {
         Map<String, Set<String>> unionGraphNames = new LinkedHashMap<>();
-        for (String entry : splitUnescaped(value, FILTER_UNION_SEP)) {
-            int sep = indexOfUnescaped(entry, FILTER_KEY_VALUE_SEP);
+        for (String entry : splitUnescaped(value, UNION_ENTRY_SEP)) {
+            int sep = indexOfUnescaped(entry, GRAPH_LIST_SEP);
             Set<String> graphNames = new LinkedHashSet<>();
             String unionName;
             if (sep < 0) {
-                // No colon: the union restricts to no specific graphs, i.e. all graphs.
-                unionName = unescape(entry);
+                // No '>': the union restricts to no specific graphs, i.e. all graphs.
+                unionName = requireNonEmptyName(unescape(entry), "union");
             } else {
-                unionName = unescape(entry.substring(0, sep));
-                for (String graphName : splitUnescaped(entry.substring(sep + 1), FILTER_GRAPH_SEP)) {
-                    graphNames.add(unescape(graphName));
+                unionName = requireNonEmptyName(unescape(entry.substring(0, sep)), "union");
+                for (String graphName : splitUnescaped(entry.substring(sep + 1), GRAPH_ENTRY_SEP)) {
+                    graphNames.add(requireNonEmptyName(unescape(graphName), "graph"));
                 }
             }
             unionGraphNames.put(unionName, graphNames);
@@ -212,13 +220,20 @@ public abstract class VersionStringSerializer<VERSION extends Comparable<VERSION
     // Escaping helpers
     // ---------------------------------------------------------------------
 
+    private static String requireNonEmptyName(String name, String kind) {
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Empty " + kind + " name is not allowed");
+        }
+        return name;
+    }
+
     private static String escape(String raw) {
         StringBuilder sb = new StringBuilder(raw.length());
         for (int i = 0; i < raw.length(); i++) {
             char c = raw.charAt(i);
-            if (c == ESCAPE || c == FAMILY_ENTRY_SEP || c == FAMILY_NAME_VALUE_SEP
-                    || c == UNION_PART_SEP || c == GRAPH_NAME_VALUE_SEP
-                    || c == FILTER_UNION_SEP || c == FILTER_GRAPH_SEP || c == FILTER_KEY_VALUE_SEP) {
+            if (c == ESCAPE || c == UNION_ENTRY_SEP || c == FAMILY_NAME_VALUE_SEP
+                    || c == GRAPH_LIST_SEP || c == GRAPH_ENTRY_SEP
+                    || c == GRAPH_NAME_VALUE_SEP) {
                 sb.append(ESCAPE);
             }
             sb.append(c);

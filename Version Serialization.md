@@ -1,279 +1,228 @@
 # Family Versions, Union Versions, and Serialization Rules
 
-This document describes the version model used by ViUn (`FamilyVersion` and `UnionVersion`), the
-related `UpdateFilter`, and the exact rules the string serializer applies to convert these objects to
-a compact, reversible text form and back.
-
-Source of truth:
-
-- `com.viun.core.model.FamilyVersion`
-- `com.viun.core.model.UnionVersion`
-- `com.viun.core.UpdateFilter`
-- `com.viun.core.serialization.VersionStringSerializer` (generic engine)
-- `com.viun.core.serialization.LongVersionStringSerializer` (`Long` specialization)
+This document describes the ViUn version model (`Family Versions` and `Union
+Versions`), the related `Update Filter`, and the rules for serializing them to a compact, reversible text
+form and parsing them back.
 
 ---
 
 ## 1. The version model
 
-### 1.1 UnionVersion
+A **version value** is a single value of the version type used throughout a given family. This
+specification places two requirements on a version type (detailed in [§4](#4-version-values)):
 
-A `UnionVersion<VERSION>` is one union-level version plus zero or more named graph versions:
+1. **Comparable** — version values of a type are **totally ordered**, so any two can be compared.
+2. **Serializable** — a version value has a text form, and that text form parses back into the same value.
 
-```
-UnionVersion<VERSION>(
-    VERSION               unionVersion,
-    Map<String, VERSION>  graphVersions   // graphName -> version
-)
-```
+### 1.1 Union Version
 
-Conceptually: `[<unionVersion>, graph1:<v1>, graph2:<v2>, ...]`. The union version always comes
-first; the graph versions are an ordered map keyed by graph name.
-
-### 1.2 FamilyVersion
-
-A `FamilyVersion<VERSION>` is an ordered map from union name to that union's `UnionVersion`:
+A Union Version pairs one version value for the union itself with a mapping of named graph versions:
 
 ```
-FamilyVersion<VERSION>(
-    Map<String, UnionVersion<VERSION>>  unionVersions   // unionName -> UnionVersion
-)
+UnionVersion
+├── unionVersion : version value          (exactly one)
+└── graphVersions : map                    (zero or more entries)
+        graphName (text) ─► version value
 ```
 
-A family aggregates the versions of all unions it contains.
+### 1.2 Family Version
 
-### 1.3 UpdateFilter
-
-An `UpdateFilter` restricts which parts of an update are streamed to a consumer. It is an ordered map
-from union name to a set of graph names:
+A Family Version aggregates the Union Versions of all unions it contains, keyed by union name:
 
 ```
-UpdateFilter(
-    Map<String, Set<String>>  unionGraphNames   // unionName -> {graphName, ...}
-)
+FamilyVersion
+└── unionVersions : map                    (zero or more entries)
+        unionName (text) ─► UnionVersion   (see §1.1)
+                               ├── unionVersion : version value
+                               └── graphVersions : map
+                                       graphName (text) ─► version value
+```
+
+### 1.3 Update Filter
+
+An Update Filter restricts which parts of an update are delivered to a consumer. It maps each selected
+union name to the set of graph names to include:
+
+```
+UpdateFilter
+└── unionGraphNames : map                  (zero or more entries)
+        unionName (text) ─► set of graphName (text)   (zero or more)
 ```
 
 Semantics:
 
-- Empty map &rarr; **no restriction**: all unions and all their graphs are included.
-- A key present in the map selects that union.
-- An **empty** graph-name set for a union &rarr; include **all** graphs of that union.
-- A **non-empty** graph-name set &rarr; include **only** those graphs.
-
-### 1.4 The `VERSION` type parameter
-
-`VERSION` is a generic type parameter bound by `VERSION extends Comparable<VERSION>`. The serializer
-is written against this parameter, so any comparable version type can be serialized. The only
-version-specific logic lives in two small hooks (see §4).
-
-The repository ships one concrete specialization, `LongVersionStringSerializer`
-(`VERSION = Long`).
+| Shape                                          | Meaning                                     |
+|------------------------------------------------|---------------------------------------------|
+| Empty mapping                                  | **No restriction** — all unions, all graphs |
+| `unionName` present                            | Select that union                           |
+| `unionName` &rarr; **empty** set               | Include **all** graphs of that union        |
+| `unionName` &rarr; **non-empty** set           | Include **only** the listed graphs          |
 
 ---
 
 ## 2. Serialization overview
 
-The format is **delimiter-based with backslash escaping**. Because every structural delimiter that
-could appear inside a name or a version value is escaped, union names, graph names, and version
-strings may contain **any** character.
+The serialized form of each object is a single text string. The encoding is **delimiter-based with
+backslash escaping**. Because every structural delimiter that could otherwise appear inside a name or
+a version value is escaped, union names, graph names, and version text may contain **any** character.
 
-Guaranteed property (round-trip):
+**Round-trip property.** Serializing an object and then parsing the resulting string yields an object
+equal in content to the original. Equality is **content-based**: it compares the set of entries and
+their values, nothing else.
 
-```
-deserialize(serialize(x)).equals(x)
-```
-
-holds for `FamilyVersion`, `UnionVersion`, and `UpdateFilter`. Map and set iteration order is treated
-as insertion order and is preserved by the round-trip (the implementations use `LinkedHashMap` /
-`LinkedHashSet`).
+**Ordering is not guaranteed.** The order in which entries (unions, graphs, graph names) appear within
+a serialized string is unspecified. An implementation may emit entries in any order, and that order
+carries no meaning. Consumers must not depend on it, and two strings that differ only in entry order
+represent the same object.
 
 ### 2.1 Delimiters
 
-| Constant                  | Char  | Role                                                   |
-|---------------------------|:-----:|--------------------------------------------------------|
-| `ESCAPE`                  | `\`   | Escape character                                       |
-| `FAMILY_ENTRY_SEP`        | `\|`  | Separates union entries in a family version            |
-| `FAMILY_NAME_VALUE_SEP`   | `:`   | Separates a union name from its serialized union version |
-| `UNION_PART_SEP`          | `;`   | Separates the union version and each graph entry       |
-| `GRAPH_NAME_VALUE_SEP`    | `:`   | Separates a graph name from its version                |
-| `FILTER_UNION_SEP`        | `\|`  | Separates union entries in an update filter            |
-| `FILTER_GRAPH_SEP`        | `;`   | Separates graph names within a filter union            |
-| `FILTER_KEY_VALUE_SEP`    | `:`   | Separates a union name from its graph-name list (present only when the list is non-empty) |
+| Char  | Role                                                       |
+|:-----:|------------------------------------------------------------|
+| `\`   | Escape character                                           |
+| `\|`  | Separates union entries in a family version or update filter |
+| `:`   | Separates a union name from its union version (family version), or a graph name from its version (union version) |
+| `>`   | Separates the union part (version value or union name) from its graph list, uniformly in a union version and an update filter |
+| `;`   | Separates graph entries from each other (union version and update filter) |
 
 ### 2.2 Escaping rule
 
-A token is escaped by prefixing a backslash before any of: `\  \|  :  ;`.
-Unescaping removes a backslash and keeps the following character verbatim.
+A text token is escaped by placing a backslash before each occurrence of any of these characters:
+`\`  `|`  `:`  `>`  `;`. Parsing reverses this: a backslash is removed and the character that follows
+it is taken literally.
 
-Splitting and key/value scanning operate **only on unescaped delimiters** (`splitUnescaped`,
-`indexOfUnescaped`), so escaped delimiters inside a name or value are never mistaken for separators.
+All splitting and name/value scanning acts **only on unescaped delimiters**, so an escaped delimiter
+inside a name or value is never mistaken for a separator.
 
 ---
 
 ## 3. Formats
 
-### 3.1 UnionVersion
+In the examples below, version values are shown as decimal integers for readability; the rules apply
+to any version type.
+
+### 3.1 Union Version
 
 ```
-unionVersion;graphName:graphVersion;graphName2:graphVersion2...
+unionVersion>graphName:graphVersion;graphName2:graphVersion2...
 ```
 
-The union version is always first. Each graph entry is `graphName:graphVersion`. The union version,
-every graph name, and every graph version are individually escaped.
+The union version comes first. A `>` introduces the graph list (present only when there is at least
+one graph). Each graph entry is `graphName:graphVersion`, and graph entries are separated by `;`. The
+union version, every graph name, and every graph version are individually escaped. Graph entries may
+appear in any order.
 
-Examples (`VERSION = Long`):
+| Object                                        | Serialized (one valid form) |
+|-----------------------------------------------|-----------------------------|
+| `7; {}`                                        | `7`                        |
+| `42; {items -> 3}`                             | `42>items:3`                |
+| `42; {items -> 3, tags -> 8}`                  | `42>items:3;tags:8`         |
+| `1; {"a:b" -> 2}` (name with delimiter)        | `1>a\:b:2`                  |
 
-| Object                                        | Serialized         |
-|-----------------------------------------------|--------------------|
-| `7; {}`                                        | `7`                |
-| `42; {"items" -> 3}`                            | `42;items:3`       |
-| `42; {"items" -> 3, "tags" -> 8}`              | `42;items:3;tags:8`|
-| `1; {"a:b" -> 2}` (name with delimiter)         | `1;a\:b:2`         |
+An empty string is not a valid union version (a union version always has at least its version value).
+A graph entry without an unescaped `:` is malformed.
 
-Deserialization of an **empty string** throws `IllegalArgumentException` (a union version must have at
-least the union-version field). A graph entry without an unescaped `:` throws
-`IllegalArgumentException` ("Malformed graph version entry").
-
-### 3.2 FamilyVersion
+### 3.2 Family Version
 
 ```
 unionName:unionVersionSerialized|unionName2:unionVersionSerialized2...
 ```
 
-Each entry is `unionName:<serialized UnionVersion>`. The union name is escaped once. The nested
-union-version string is escaped **again** as a whole, so its own `;` and `:` appear backslash-escaped
-within the family entry (double escaping).
+Each entry is `unionName:<serialized Union Version>`. The union name is escaped; the serialized Union
+Version is embedded **verbatim** after the first (unescaped) `:`. This is unambiguous because a
+serialized Union Version never contains an unescaped `|` (so entry splitting on `|` is safe) and the
+escaped union name contains no unescaped `:` (so the first unescaped `:` is always the real
+separator). Union entries may appear in any order.
 
-Examples (`VERSION = Long`):
+| Object                                                   | Serialized (one valid form) |
+|----------------------------------------------------------|-----------------------------|
+| `{}` (no unions)                                          | `""` (empty string)        |
+| `{orders -> 5; {items -> 3}}`                             | `orders:5>items:3`          |
+| `{a -> 1; {}, b -> 2; {g -> 9}}`                          | `a:1\|b:2>g:9`               |
 
-| Object                                                   | Serialized            |
-|----------------------------------------------------------|-----------------------|
-| `{}` (no unions)                                          | `""` (empty string)   |
-| `{"orders" -> 5; {"items" -> 3}}`                         | `orders:5\;items\:3`  |
-| `{"a" -> 1; {}, "b" -> 2; {"g" -> 9}}`                    | `a:1\|b:2\;g\:9`      |
+An empty string denotes an **empty** family version. An entry without an unescaped `:` is malformed.
 
-Deserialization of an **empty string** yields an **empty** family version. An entry without an
-unescaped `:` throws `IllegalArgumentException` ("Malformed family version entry").
-
-### 3.3 UpdateFilter
+### 3.3 Update Filter
 
 ```
-unionName:graphName;graphName2|unionName2:graphName3...
+unionName>graphName;graphName2|unionName2>graphName3...
 ```
 
-Each entry is a union name, optionally followed by `:` and a semicolon-separated list of graph names.
-The colon and list are present **only when the union restricts to specific graphs**; a union with an
-empty graph set (meaning "all graphs") is written as the bare union name. Names are escaped.
+Each entry is a union name, optionally followed by `>` and a semicolon-separated list of graph names.
+The `>` and list are present **only when the union restricts to specific graphs**; a union with an
+empty graph set (meaning "all graphs") is written as the bare union name. Names are escaped. Entries
+and graph names may appear in any order.
 
-Examples:
+| Object                                                       | Serialized (one valid form) |
+|--------------------------------------------------------------|-----------------------------|
+| `{}` (no restriction)                                        | `""` (empty string)        |
+| `{orders -> {}}` (all graphs of `orders`)                    | `orders`                    |
+| `{orders -> {items}}`                                        | `orders>items`              |
+| `{orders -> {items, tags}, users -> {}}`                     | `orders>items;tags\|users`  |
 
-| Object                                                       | Serialized           |
-|--------------------------------------------------------------|----------------------|
-| `{}` (no restriction)                                        | `""` (empty string)  |
-| `{"orders" -> {}}` (all graphs of `orders`)                  | `orders`             |
-| `{"orders" -> {"items"}}`                                    | `orders:items`       |
-| `{"orders" -> {"items", "tags"}, "users" -> {}}`             | `orders:items;tags\|users` |
-
-Deserialization of an **empty string** yields an **empty** filter (no restriction). An entry with no
-unescaped `:` denotes a union with an empty graph set (all graphs); there is no malformed-entry case
-for update filters. A trailing colon with nothing after it (`unionName:`) deserializes identically to
-the bare `unionName` — both yield the empty graph set (all graphs).
+An empty string denotes an **empty** filter (no restriction). An entry with no unescaped `>` denotes a
+union with an empty graph set (all graphs). A trailing `>` with nothing after it (`unionName>`) means
+the same as the bare `unionName` — both are the empty graph set (all graphs). An entry whose union
+name or any listed graph name is empty is malformed.
 
 ---
 
-## 4. The generic engine and its extension points
+## 4. Version values
 
-`VersionStringSerializer<VERSION>` contains all structural logic. Two protected hooks isolate the
-version-specific part:
+The format is parameterized by the version type. Every structural rule above is independent of that
+type. A version type must satisfy two requirements.
 
-```java
-// Render a version value. Defaults to Object.toString().
-protected String versionToString(VERSION version) {
-    return version.toString();
-}
+**Comparability.** Version values of a type are **totally ordered**: any two values can be compared
+and ranked. The serialization format itself does not use this ordering, but the version model relies
+on it to reason about which version is newer.
 
-// Parse a version value produced by versionToString(...). No generic default exists,
-// so subclasses must implement this.
-protected abstract VERSION versionFromString(String value);
-```
+**Serialization.** Only the conversion of a single version value to and from text is type-specific.
+Two operations define it:
 
-Rules for a correct subclass:
+- **value → text.** Produces the text form of a version value. By default this is the value's natural
+  text form. The result may contain any characters, including delimiters — the format escapes them.
+- **text → value.** Parses a version value from the text produced above. There is no universal
+  default; each version type must define it.
 
-- `versionFromString(versionToString(v))` must equal `v` for every valid version `v`.
-- `versionToString` may return any string; the engine escapes it, so delimiter characters in the
-  output are safe.
+**Correctness requirement.** Parsing the text form of any valid version value must reproduce that same
+value. For example, integer version values are written in decimal and read back as decimal integers.
 
-The `Long` specialization:
-
-```java
-public final class LongVersionStringSerializer extends VersionStringSerializer<Long> {
-    @Override
-    protected Long versionFromString(String value) {
-        return Long.parseLong(value);
-    }
-    // versionToString inherits the default Long.toString(...)
-}
-```
-
-`serializeUpdateFilter` / `deserializeUpdateFilter` are `static` because an update filter contains no
-`VERSION` values and is therefore version-independent.
+An Update Filter contains no version values, so its serialization does not involve the version type.
 
 ---
 
-## 5. Official stance on names containing delimiters
+## 5. Names containing delimiters
 
-Union names and graph names may contain **any** character, including every structural delimiter.
-They are always escaped on write and unescaped on read, and they round-trip exactly.
+Union names and graph names must be **non-empty** and may otherwise contain **any** character,
+including every structural delimiter. They are escaped when written and unescaped when read, and they
+survive the round-trip exactly.
 
-| Name        | Character | Serialized form | Round-trips |
-|-------------|:---------:|-----------------|:-----------:|
-| graph name  | `:`       | `g\:x`          | yes         |
-| graph name  | `;`       | `g\;x`          | yes         |
-| graph name  | `\|`      | `g\|x`          | yes         |
-| union name  | `:`       | `u\:x`          | yes         |
-| union name  | `;`       | `u\;x`          | yes         |
-| union name  | `\|`      | `u\|x`          | yes         |
+| Name        | Character | Raw name | Escaped form | Round-trips |
+|-------------|:---------:|----------|--------------|:-----------:|
+| graph name  | `:`       | `g:x`    | `g\:x`       | yes         |
+| graph name  | `;`       | `g;x`    | `g\;x`       | yes         |
+| graph name  | `>`       | `g>x`    | `g\>x`       | yes         |
+| graph name  | `\|`      | `g\|x`   | `g\\|x`      | yes         |
+| union name  | `:`       | `u:x`    | `u\:x`       | yes         |
+| union name  | `;`       | `u;x`    | `u\;x`       | yes         |
+| union name  | `>`       | `u>x`    | `u\>x`       | yes         |
+| union name  | `\|`      | `u\|x`   | `u\\|x`      | yes         |
 
-The same holds for the backslash itself, in both names and version strings.
+The same holds for the backslash itself, in both names and version text.
 
 ---
 
 ## 6. Edge cases and limitations
 
-- **Empty input strings.**
-  - `deserializeFamilyVersion("")` &rarr; empty family.
-  - `deserializeUpdateFilter("")` &rarr; empty filter (no restriction).
-  - `deserializeUnionVersion("")` &rarr; throws `IllegalArgumentException` (a union version always has
-    at least its version field).
+- **Empty strings.**
+  - Empty family version &rarr; empty family.
+  - Empty update filter &rarr; empty filter (no restriction).
+  - Empty union version &rarr; not valid (a union version always has at least its version value).
+  - Empty union name or graph name &rarr; not allowed (names must be non-empty).
 
-- **Empty graph-name string in an `UpdateFilter` is ambiguous.** A union mapped to the single
-  graph-name set `{""}` serializes to `unionName:` (colon followed by an empty graph token). On
-  deserialization the empty list after the colon reads back as the empty set `{}` (all graphs). Do
-  **not** rely on an empty-string graph name inside an update filter; it is not preserved. Note the
-  common "all graphs" set `{}` is unaffected: it serializes to the bare `unionName` (no colon) and
-  round-trips exactly. (The `{""}` case is the only known non-round-tripping case; empty strings are
-  fine elsewhere, including as union/graph names in versions.)
+- **Order is insignificant.** As stated in [§2](#2-serialization-overview), entry order within a
+  serialized string carries no meaning and is not guaranteed. Equality compares content only.
 
-- **Ordering.** Iteration order of unions and graphs is preserved as insertion order via
-  `LinkedHashMap`/`LinkedHashSet`. Equality of the deserialized object ignores iteration order anyway
-  (map/set equality is content-based), but the textual output is order-sensitive.
-
-- **Malformed input.** For union and family versions, missing required separators throw
-  `IllegalArgumentException`; a malformed version value throws whatever `versionFromString` throws
-  (for `Long`, `NumberFormatException`). Update filters have no malformed-entry case: any token is a
-  valid union name, with or without a graph list.
-
----
-
-## 7. Test coverage
-
-The behavior above is exercised by:
-
-- `VersionStringSerializerTest` — generic engine over `String` and `Integer` versions: default and
-  overridden `versionToString`/`versionFromString`, escaping of every delimiter in names and version
-  values, union/family formats and ordering, empty-input handling, and malformed-input exceptions for
-  union/family versions. Also covers the static `UpdateFilter` methods, including the bare-name
-  "all graphs" form and colon-less entries.
-- `LongVersionStringSerializerTest` — the `Long` specialization: the documented format examples,
-  `Long` parsing, `NumberFormatException` on non-numeric input, and `Long.MIN_VALUE` / `Long.MAX_VALUE`
-  round-trips.
+- **Malformed input.** A missing required separator makes a union or family version malformed, as does
+  a version value whose text cannot be parsed by the version type. An empty union name or graph name is
+  malformed in every format (names must be non-empty).

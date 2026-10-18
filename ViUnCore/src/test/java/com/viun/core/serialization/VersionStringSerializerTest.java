@@ -85,7 +85,7 @@ class VersionStringSerializerTest {
                 return Integer.parseInt(value);
             }
         }.serializeUnionVersion(uv);
-        assertEquals("42;items:3", str);
+        assertEquals("42>items:3", str);
     }
 
     // ---------------------------------------------------------------------
@@ -95,7 +95,7 @@ class VersionStringSerializerTest {
     @Test
     void overriddenVersionToStringIsUsedForUnionAndGraphVersions() {
         UnionVersion<Integer> uv = union(255, "g", 16);
-        assertEquals("ff;g:10", hexSerializer.serializeUnionVersion(uv));
+        assertEquals("ff>g:10", hexSerializer.serializeUnionVersion(uv));
     }
 
     @Test
@@ -119,7 +119,7 @@ class VersionStringSerializerTest {
 
     @Test
     void graphNamesWithEveryDelimiterRoundTrip() {
-        String tricky = "\\:;|,=";
+        String tricky = "\\:;|,=>";
         UnionVersion<String> uv = union("v", tricky, "w");
         assertEquals(uv, stringSerializer.deserializeUnionVersion(
                 stringSerializer.serializeUnionVersion(uv)));
@@ -137,7 +137,7 @@ class VersionStringSerializerTest {
     @Test
     void unionVersionMultipleGraphsPreserveInsertionOrder() {
         UnionVersion<String> uv = union("42", "items", "3", "tags", "8");
-        assertEquals("42;items:3;tags:8", stringSerializer.serializeUnionVersion(uv));
+        assertEquals("42>items:3;tags:8", stringSerializer.serializeUnionVersion(uv));
     }
 
     @Test
@@ -150,7 +150,7 @@ class VersionStringSerializerTest {
     void deserializeUnionVersionWithMalformedGraphEntryThrows() {
         // "items3" has no unescaped ':' separator.
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> stringSerializer.deserializeUnionVersion("1;items3"));
+                () -> stringSerializer.deserializeUnionVersion("1>items3"));
         assertTrue(ex.getMessage().contains("graph version entry"));
     }
 
@@ -170,11 +170,11 @@ class VersionStringSerializerTest {
     }
 
     @Test
-    void familyVersionNestedUnionVersionIsEscaped() {
+    void familyVersionEmbedsUnionVersionVerbatim() {
         FamilyVersion<String> fv = family(
                 "orders", union("5", "items", "3"));
-        // The nested "5;items:3" has its ';' and ':' escaped inside the family entry.
-        assertEquals("orders:5\\;items\\:3", stringSerializer.serializeFamilyVersion(fv));
+        // The nested "5>items:3" is embedded as-is after the first colon.
+        assertEquals("orders:5>items:3", stringSerializer.serializeFamilyVersion(fv));
     }
 
     @Test
@@ -226,7 +226,7 @@ class VersionStringSerializerTest {
 
     @Test
     void updateFilterUnionWithSelectedGraphs() {
-        assertEquals("orders:items;tags", VersionStringSerializer.serializeUpdateFilter(
+        assertEquals("orders>items;tags", VersionStringSerializer.serializeUpdateFilter(
                 filter("orders", new LinkedHashSet<>(java.util.List.of("items", "tags")))));
     }
 
@@ -240,16 +240,72 @@ class VersionStringSerializerTest {
     }
 
     @Test
-    void deserializeUpdateFilterEntryWithoutColonMeansAllGraphs() {
-        UpdateFilter f = VersionStringSerializer.deserializeUpdateFilter("orders|users:items");
+    void deserializeUpdateFilterEntryWithoutSeparatorMeansAllGraphs() {
+        UpdateFilter f = VersionStringSerializer.deserializeUpdateFilter("orders|users>items");
         assertEquals(Set.of(), f.unionGraphNames().get("orders"));
         assertEquals(Set.of("items"), f.unionGraphNames().get("users"));
     }
 
     @Test
-    void deserializeUpdateFilterTrailingColonEqualsBareName() {
+    void deserializeUpdateFilterTrailingSeparatorEqualsBareName() {
         assertEquals(
                 VersionStringSerializer.deserializeUpdateFilter("orders"),
-                VersionStringSerializer.deserializeUpdateFilter("orders:"));
+                VersionStringSerializer.deserializeUpdateFilter("orders>"));
+    }
+
+    // ---------------------------------------------------------------------
+    // Empty names are not allowed (enforced on serialize and deserialize)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void serializeFamilyVersionWithEmptyUnionNameThrows() {
+        FamilyVersion<String> fv = family("", union("1"));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> stringSerializer.serializeFamilyVersion(fv));
+        assertTrue(ex.getMessage().contains("union name"));
+    }
+
+    @Test
+    void serializeUnionVersionWithEmptyGraphNameThrows() {
+        UnionVersion<String> uv = union("1", "", "2");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> stringSerializer.serializeUnionVersion(uv));
+        assertTrue(ex.getMessage().contains("graph name"));
+    }
+
+    @Test
+    void serializeUpdateFilterWithEmptyUnionNameThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionStringSerializer.serializeUpdateFilter(filter("", Set.of())));
+    }
+
+    @Test
+    void serializeUpdateFilterWithEmptyGraphNameThrows() {
+        assertThrows(IllegalArgumentException.class, () -> VersionStringSerializer.serializeUpdateFilter(
+                filter("orders", new LinkedHashSet<>(java.util.List.of("")))));
+    }
+
+    @Test
+    void deserializeFamilyVersionWithEmptyUnionNameThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> stringSerializer.deserializeFamilyVersion(":1"));
+    }
+
+    @Test
+    void deserializeUnionVersionWithEmptyGraphNameThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> stringSerializer.deserializeUnionVersion("1>:2"));
+    }
+
+    @Test
+    void deserializeUpdateFilterWithEmptyUnionNameThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionStringSerializer.deserializeUpdateFilter("orders|"));
+    }
+
+    @Test
+    void deserializeUpdateFilterWithEmptyGraphNameThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionStringSerializer.deserializeUpdateFilter("orders>items;"));
     }
 }

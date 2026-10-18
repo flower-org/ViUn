@@ -48,18 +48,18 @@ class LongVersionStringSerializerTest {
 
     @Test
     void unionVersionSingleGraph() {
-        assertEquals("42;items:3", serializer.serializeUnionVersion(union(42L, "items", 3L)));
+        assertEquals("42>items:3", serializer.serializeUnionVersion(union(42L, "items", 3L)));
     }
 
     @Test
     void unionVersionMultipleGraphs() {
-        assertEquals("42;items:3;tags:8",
+        assertEquals("42>items:3;tags:8",
                 serializer.serializeUnionVersion(union(42L, "items", 3L, "tags", 8L)));
     }
 
     @Test
     void unionVersionGraphNameWithDelimiterIsEscaped() {
-        assertEquals("1;a\\:b:2", serializer.serializeUnionVersion(union(1L, "a:b", 2L)));
+        assertEquals("1>a\\:b:2", serializer.serializeUnionVersion(union(1L, "a:b", 2L)));
     }
 
     @Test
@@ -70,7 +70,7 @@ class LongVersionStringSerializerTest {
 
     @Test
     void deserializeUnionVersionReadsLongValues() {
-        UnionVersion<Long> uv = serializer.deserializeUnionVersion("42;items:3");
+        UnionVersion<Long> uv = serializer.deserializeUnionVersion("42>items:3");
         assertEquals(42L, uv.unionVersion());
         assertEquals(3L, uv.graphVersions().get("items"));
     }
@@ -98,15 +98,15 @@ class LongVersionStringSerializerTest {
     }
 
     @Test
-    void familyVersionSingleUnionNestedEscaping() {
-        assertEquals("orders:5\\;items\\:3",
+    void familyVersionSingleUnionEmbedsVerbatim() {
+        assertEquals("orders:5>items:3",
                 serializer.serializeFamilyVersion(family("orders", union(5L, "items", 3L))));
     }
 
     @Test
     void familyVersionMultipleUnions() {
         FamilyVersion<Long> fv = family("a", union(1L), "b", union(2L, "g", 9L));
-        assertEquals("a:1|b:2\\;g\\:9", serializer.serializeFamilyVersion(fv));
+        assertEquals("a:1|b:2>g:9", serializer.serializeFamilyVersion(fv));
     }
 
     @Test
