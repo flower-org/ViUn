@@ -8,8 +8,6 @@
 ```mermaid
 erDiagram
     UNIONS ||--|| ELEMENTS : "has_union_metadata_element"
-    UNIONS ||--o{ ELEMENTS : contains
-    UNIONS ||--o{ GRAPHS : contains
     UNIONS {
         bigint id_union PK
         enum singleton_keeper UK
@@ -28,10 +26,9 @@ erDiagram
     ELEMENTS ||--o{ LINKS : references
     ELEMENTS {
         bigint id_element PK
-        varchar key UK
+        varchar key
         text content
         bigint version UK
-        bigint id_union FK
         bigint sync
     }
 
@@ -66,7 +63,6 @@ erDiagram
     GRAPHS ||--o{ LINKS : contains
     GRAPHS {
         bigint id_graph PK
-        bigint id_union FK
         varchar graph_name
         bool is_tombstone
         bigint id_graph_metadata_element FK
