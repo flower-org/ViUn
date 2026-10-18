@@ -4,10 +4,10 @@ import javax.annotation.Nullable;
 import java.util.Collection;
 
 public interface UnionUpdate<VERSION extends Comparable<VERSION>, ID> {
+    String unionName();
+
     UnionVersion<VERSION> versionFrom();
     UnionVersion<VERSION> versionTo();
-
-    String unionName();
 
     @Nullable UnionMetadataElement<VERSION, ID> unionMetadataElement();
 
