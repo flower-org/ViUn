@@ -1,4 +1,4 @@
-package com.viun.core;
+package com.viun.core.stream;
 
 import java.util.Map;
 import java.util.Set;

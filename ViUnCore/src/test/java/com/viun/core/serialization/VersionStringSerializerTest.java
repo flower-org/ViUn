@@ -1,6 +1,6 @@
 package com.viun.core.serialization;
 
-import com.viun.core.UpdateFilter;
+import com.viun.core.stream.UpdateFilter;
 import com.viun.core.model.FamilyVersion;
 import com.viun.core.model.UnionVersion;
 import org.junit.jupiter.api.Test;

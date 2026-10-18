@@ -1,4 +1,4 @@
-package com.viun.core;
+package com.viun.core.stream;
 
 import com.viun.core.model.FamilyUpdate;
 import com.viun.core.model.FamilyVersion;
@@ -35,4 +35,16 @@ public interface ViUnStreamer<VERSION extends Comparable<VERSION>, ID> {
      */
     void streamUpdates(FamilyVersion<VERSION> from, UpdateFilter filter,
                        Consumer<FamilyUpdate<VERSION, ID>> consumer);
+
+    /**
+     * Hints that a new version may be available, asking the streamer to check for updates
+     * immediately and propagate any it finds to active subscribers, rather than waiting for its
+     * next scheduled poll (if applicable).
+     *
+     * <p>This is an optimization for parties that already know an update event occurred: it
+     * reduces propagation latency but is not required for correctness. The call is an advisory
+     * signal — it is idempotent, safe to call when no update actually exists, and the streamer
+     * may coalesce concurrent or rapid successive calls into a single check.
+     */
+    void triggerUpdateCheck();
 }
