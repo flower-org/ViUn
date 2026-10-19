@@ -3,6 +3,7 @@ package com.viun.core.source;
 import com.viun.core.model.*;
 
 import javax.annotation.Nullable;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A mutable ViUn source: the authoritative set of write operations that mutate a family of
@@ -28,31 +29,32 @@ public interface ViUnSource<VERSION extends Comparable<VERSION>, ID, TRANSACTION
     // Union
     // ------------------------------------------------------------------
 
-    void createUnion(TRANSACTION_CONTEXT transactionContext, String unionName, @Nullable Element unionMetadataElement);
+    CompletableFuture<Void> createUnion(TRANSACTION_CONTEXT transactionContext, String unionName, @Nullable Element unionMetadataElement);
 
     /** Updates union metadata and/or its content. */
-    void upsertUnionMetadata(TRANSACTION_CONTEXT transactionContext, String unionName, Element updatedUnionMetadataElement);
+    CompletableFuture<Void> upsertUnionMetadata(TRANSACTION_CONTEXT transactionContext, String unionName, Element updatedUnionMetadataElement);
 
-    void tombstoneUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
+    CompletableFuture<Void> tombstoneUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
 
-    void reviveUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
+    CompletableFuture<Void> reviveUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
 
-    void deleteUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
+    /** Permanently removes the union. Only permitted when it is tombstoned. */
+    CompletableFuture<Void> deleteUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
 
     // ------------------------------------------------------------------
     // Graph
     // ------------------------------------------------------------------
 
-    void createGraph(TRANSACTION_CONTEXT transactionContext, String graphName, @Nullable Element graphMetadataElement);
+    CompletableFuture<Void> createGraph(TRANSACTION_CONTEXT transactionContext, String graphName, @Nullable Element graphMetadataElement);
 
-    /** Updates graph metadata and/or its content. */
-    void upsertGraphMetadata(TRANSACTION_CONTEXT transactionContext, String graphName, Element updatedGraphMetadataElement);
+    /**` Updates graph metadata and/or its content. */
+    CompletableFuture<Void> upsertGraphMetadata(TRANSACTION_CONTEXT transactionContext, String graphName, Element updatedGraphMetadataElement);
 
-    void tombstoneGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
+    CompletableFuture<Void> tombstoneGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
 
-    void reviveGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
+    CompletableFuture<Void> reviveGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
 
-    void deleteGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
+    CompletableFuture<Void> deleteGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
 
     // ------------------------------------------------------------------
     // VertexType / Vertex / EdgeType / Edge
@@ -61,55 +63,55 @@ public interface ViUnSource<VERSION extends Comparable<VERSION>, ID, TRANSACTION
     // permitted for an element that is not referenced by any link.
     // ------------------------------------------------------------------
 
-    ID createVertexType(TRANSACTION_CONTEXT transactionContext, Element vertexTypeElement, @Nullable SchemaType schemaType);
+    CompletableFuture<ID> createVertexType(TRANSACTION_CONTEXT transactionContext, Element vertexTypeElement, @Nullable SchemaType schemaType);
 
     /** Updates vertex type content. or schema type */
-    void updateVertexType(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId, @Nullable Element updatedVertexTypeElement);
+    CompletableFuture<Void> updateVertexType(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId, @Nullable Element updatedVertexTypeElement);
 
     /** Deletes a vertex type. Only permitted when it is not referenced by any link. */
-    void deleteVertexType(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId);
+    CompletableFuture<Void> deleteVertexType(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId);
 
-    ID createVertex(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId, Element vertexElement);
+    CompletableFuture<ID> createVertex(TRANSACTION_CONTEXT transactionContext, ID vertexTypeId, Element vertexElement);
 
     /** Updates vertex content. */
-    void updateVertex(TRANSACTION_CONTEXT transactionContext, ID vertexId, @Nullable Element vertexElement);
+    CompletableFuture<Void> updateVertex(TRANSACTION_CONTEXT transactionContext, ID vertexId, @Nullable Element vertexElement);
 
     /** Deletes a vertex. Only permitted when it is not referenced by any link. */
-    void deleteVertex(TRANSACTION_CONTEXT transactionContext, ID vertexId);
+    CompletableFuture<Void> deleteVertex(TRANSACTION_CONTEXT transactionContext, ID vertexId);
 
-    ID createEdgeType(TRANSACTION_CONTEXT transactionContext, Element edgeTypeElement, @Nullable Boolean isDirected,
+    CompletableFuture<ID> createEdgeType(TRANSACTION_CONTEXT transactionContext, Element edgeTypeElement, @Nullable Boolean isDirected,
                       @Nullable SchemaType schemaType);
 
     /** Updates edge type content. */
-    void updateEdgeType(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId, @Nullable Element edgeTypeElement);
+    CompletableFuture<Void> updateEdgeType(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId, @Nullable Element edgeTypeElement);
 
     /** Deletes an edge type. Only permitted when it is not referenced by any link. */
-    void deleteEdgeType(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId);
+    CompletableFuture<Void> deleteEdgeType(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId);
 
-    ID createEdge(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId, ID vertexFrom, ID vertexTo, Element edgeElement);
+    CompletableFuture<ID> createEdge(TRANSACTION_CONTEXT transactionContext, ID edgeTypeId, ID vertexFrom, ID vertexTo, Element edgeElement);
 
     /** Updates edge content. */
-    void updateEdge(TRANSACTION_CONTEXT transactionContext, ID edgeId, @Nullable Element edgeElement);
+    CompletableFuture<Void> updateEdge(TRANSACTION_CONTEXT transactionContext, ID edgeId, @Nullable Element edgeElement);
 
     /** Deletes an edge. Only permitted when it is not referenced by any link. */
-    void deleteEdge(TRANSACTION_CONTEXT transactionContext, ID edgeId);
+    CompletableFuture<Void> deleteEdge(TRANSACTION_CONTEXT transactionContext, ID edgeId);
 
     // ------------------------------------------------------------------
     // Link (scoped to a graph)
     // ------------------------------------------------------------------
 
-    ID createLink(TRANSACTION_CONTEXT transactionContext, String graphName, ID linkedElementId, Element linkElement);
+    CompletableFuture<ID> createLink(TRANSACTION_CONTEXT transactionContext, String graphName, ID linkedElementId, Element linkElement);
 
     /** Updates link content. */
-    void updateLink(TRANSACTION_CONTEXT transactionContext, ID linkId, @Nullable Element linkElement);
+    CompletableFuture<Void> updateLink(TRANSACTION_CONTEXT transactionContext, ID linkId, @Nullable Element linkElement);
 
-    void tombstoneLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
+    CompletableFuture<Void> tombstoneLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
 
-    void reviveLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
+    CompletableFuture<Void> reviveLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
 
     /** Permanently removes a link that is currently tombstoned. */
-    void deleteTombstonedLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
+    CompletableFuture<Void> deleteTombstonedLink(TRANSACTION_CONTEXT transactionContext, ID linkId);
 
     /** Permanently removes every tombstoned link of the given graph. */
-    void deleteTombstonedLinksForGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
+    CompletableFuture<Void> deleteTombstonedLinksForGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
 }
