@@ -7,6 +7,11 @@
 
 ```mermaid
 erDiagram
+    VERSIONS {
+        bigint version PK
+        timestamp created_at
+    }
+
     UNIONS ||--|| ELEMENTS : "has_union_metadata_element"
     UNIONS {
         bigint id_union PK
