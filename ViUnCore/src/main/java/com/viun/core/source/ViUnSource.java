@@ -32,7 +32,7 @@ public interface ViUnSource<VERSION extends Comparable<VERSION>, ID, TRANSACTION
     CompletableFuture<Void> createUnion(TRANSACTION_CONTEXT transactionContext, String unionName, @Nullable Element unionMetadataElement);
 
     /** Updates union metadata and/or its content. */
-    CompletableFuture<Void> upsertUnionMetadata(TRANSACTION_CONTEXT transactionContext, String unionName, Element updatedUnionMetadataElement);
+    CompletableFuture<VERSION> upsertUnionMetadata(TRANSACTION_CONTEXT transactionContext, String unionName, Element updatedUnionMetadataElement);
 
     CompletableFuture<Void> tombstoneUnion(TRANSACTION_CONTEXT transactionContext, String unionName);
 
@@ -48,7 +48,7 @@ public interface ViUnSource<VERSION extends Comparable<VERSION>, ID, TRANSACTION
     CompletableFuture<Void> createGraph(TRANSACTION_CONTEXT transactionContext, String graphName, @Nullable Element graphMetadataElement);
 
     /**` Updates graph metadata and/or its content. */
-    CompletableFuture<Void> upsertGraphMetadata(TRANSACTION_CONTEXT transactionContext, String graphName, Element updatedGraphMetadataElement);
+    CompletableFuture<VERSION> upsertGraphMetadata(TRANSACTION_CONTEXT transactionContext, String graphName, Element updatedGraphMetadataElement);
 
     CompletableFuture<Void> tombstoneGraph(TRANSACTION_CONTEXT transactionContext, String graphName);
 

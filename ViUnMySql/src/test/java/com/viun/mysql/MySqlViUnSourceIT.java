@@ -75,11 +75,13 @@ public class MySqlViUnSourceIT {
 
         assertFails(ViUnSourceException.class, t -> source.createUnion(t, "u2", null));
 
-        tx(t -> source.upsertUnionMetadata(t, "u", el("uk2", "uc2")));
+        Long unionVersion = tx(t -> source.upsertUnionMetadata(t, "u", el("uk2", "uc2")));
         union = one("SELECT * FROM UNIONS");
         assertEquals(unionMeta, union.getLong("id_union_metadata_element"));
         assertEquals("uc2", one("SELECT content FROM ELEMENTS WHERE id_element = " + unionMeta).getString(0));
         assertTrue(union.getLong("last_element_update_version") > unionMeta);
+        assertEquals(union.getLong("last_element_update_version"), unionVersion);
+        assertEquals(unionVersion, one("SELECT version FROM ELEMENTS WHERE id_element = " + unionMeta).getLong(0));
 
         tx(t -> source.createGraph(t, "g1", null));
         assertFails(ViUnSourceException.class, t -> source.createGraph(t, "g1", null));
@@ -87,10 +89,19 @@ public class MySqlViUnSourceIT {
         assertNull(graph.getLong("id_graph_metadata_element"));
         long created = graph.getLong("last_element_update_version");
 
-        tx(t -> source.upsertGraphMetadata(t, "g1", el("gk", "gc")));
+        Long graphVersion = tx(t -> source.upsertGraphMetadata(t, "g1", el("gk", "gc")));
         graph = one("SELECT * FROM GRAPHS WHERE graph_name = 'g1'");
         assertNotNull(graph.getLong("id_graph_metadata_element"));
         assertTrue(graph.getLong("last_element_update_version") > created);
+        assertEquals(graph.getLong("last_element_update_version"), graphVersion);
+        assertEquals(graphVersion, graph.getLong("id_graph_metadata_element"));
+
+        // update of an existing metadata element returns the new version, keeping the element id
+        Long graphVersion2 = tx(t -> source.upsertGraphMetadata(t, "g1", el("gk2", "gc2")));
+        assertTrue(graphVersion2 > graphVersion);
+        graph = one("SELECT * FROM GRAPHS WHERE graph_name = 'g1'");
+        assertEquals(graphVersion, graph.getLong("id_graph_metadata_element"));
+        assertEquals(graphVersion2, graph.getLong("last_element_update_version"));
 
         tx(t -> source.tombstoneGraph(t, "g1"));
         assertFails(ViUnSourceException.class, t -> source.tombstoneGraph(t, "g1"));

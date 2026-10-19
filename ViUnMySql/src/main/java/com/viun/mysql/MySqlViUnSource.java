@@ -41,13 +41,13 @@ import java.util.concurrent.CompletableFuture;
  * tombstoned while active links depend on it, nor deleted while any links depend on it.
  */
 public class MySqlViUnSource implements ViUnSource<Long, Long, SqlConnection> {
-    private static final int IN_CLAUSE_CHUNK_SIZE = 500;
+    protected static final int IN_CLAUSE_CHUNK_SIZE = 500;
 
     // ------------------------------------------------------------------
     // Elements / versions
     // ------------------------------------------------------------------
 
-    private Future<Long> nextVersion(SqlConnection tx) {
+    protected Future<Long> nextVersion(SqlConnection tx) {
         return query(tx, "INSERT INTO VERSIONS () VALUES ()", Tuple.tuple())
                 .map(rows -> rows.property(MySQLClient.LAST_INSERTED_ID));
     }
@@ -59,31 +59,32 @@ public class MySqlViUnSource implements ViUnSource<Long, Long, SqlConnection> {
     @Override
     public CompletableFuture<Void> createUnion(SqlConnection tx, String unionName,
                                                @Nullable Element unionMetadataElement) {
+        // Explicit check to avoid parasitic element creation if the union already exists.
         return toCf(query(tx, "SELECT id_union FROM UNIONS FOR UPDATE", Tuple.tuple())
                 .compose(rows -> rows.size() > 0
                         ? Future.<Long>failedFuture(new ViUnSourceException(
                                 "Union already exists; a source DB holds a single union"))
                         : nextVersion(tx))
                 .compose(version -> insertOptionalElement(tx, version, unionMetadataElement)
-                        .compose(metadataId -> query(tx,
-                                "INSERT INTO UNIONS (singleton_keeper, union_name, id_union_metadata_element, "
-                                        + "last_element_update_version) VALUES ('', ?, ?, ?)",
-                                Tuple.of(unionName, metadataId, version))))
+                .compose(metadataId -> query(tx,
+                        "INSERT INTO UNIONS (singleton_keeper, union_name, id_union_metadata_element, "
+                                + "last_element_update_version) VALUES ('', ?, ?, ?)",
+                        Tuple.of(unionName, metadataId, version))))
                 .mapEmpty());
     }
 
     @Override
-    public CompletableFuture<Void> upsertUnionMetadata(SqlConnection tx, String unionName,
+    public CompletableFuture<Long> upsertUnionMetadata(SqlConnection tx, String unionName,
                                                        Element updatedUnionMetadataElement) {
         return toCf(lockUnion(tx, unionName)
                 .compose(union -> nextVersion(tx)
-                        .compose(version -> upsertMetadataElement(tx, union.metadataElementId(), version,
-                                updatedUnionMetadataElement)
-                                .compose(metadataId -> query(tx,
-                                        "UPDATE UNIONS SET id_union_metadata_element = ?, last_element_update_version = ? "
-                                                + "WHERE id_union = ?",
-                                        Tuple.of(metadataId, version, union.id())))))
-                .mapEmpty());
+                .compose(version -> upsertMetadataElement(tx, union.metadataElementId(), version,
+                        updatedUnionMetadataElement)
+                .compose(metadataId -> query(tx,
+                        "UPDATE UNIONS SET id_union_metadata_element = ?, last_element_update_version = ? "
+                                + "WHERE id_union = ?",
+                        Tuple.of(metadataId, version, union.id())))
+                .map(r -> version))));
     }
 
     @Override
@@ -93,6 +94,7 @@ public class MySqlViUnSource implements ViUnSource<Long, Long, SqlConnection> {
 
     @Override
     public CompletableFuture<Void> reviveUnion(SqlConnection tx, String unionName) {
+        // TODO: union revive needs to update all versions for everything
         return toCf(setUnionTombstone(tx, unionName, false));
     }
 
@@ -159,17 +161,17 @@ public class MySqlViUnSource implements ViUnSource<Long, Long, SqlConnection> {
     }
 
     @Override
-    public CompletableFuture<Void> upsertGraphMetadata(SqlConnection tx, String graphName,
+    public CompletableFuture<Long> upsertGraphMetadata(SqlConnection tx, String graphName,
                                                        Element updatedGraphMetadataElement) {
         return toCf(lockGraph(tx, graphName)
                 .compose(graph -> nextVersion(tx)
-                        .compose(version -> upsertMetadataElement(tx, graph.metadataElementId(), version,
-                                updatedGraphMetadataElement)
-                                .compose(metadataId -> query(tx,
-                                        "UPDATE GRAPHS SET id_graph_metadata_element = ?, last_element_update_version = ? "
-                                                + "WHERE id_graph = ?",
-                                        Tuple.of(metadataId, version, graph.id())))))
-                .mapEmpty());
+                .compose(version -> upsertMetadataElement(tx, graph.metadataElementId(), version,
+                        updatedGraphMetadataElement)
+                .compose(metadataId -> query(tx,
+                        "UPDATE GRAPHS SET id_graph_metadata_element = ?, last_element_update_version = ? "
+                                + "WHERE id_graph = ?",
+                        Tuple.of(metadataId, version, graph.id())))
+                .map(r -> version))));
     }
 
     @Override
@@ -179,6 +181,7 @@ public class MySqlViUnSource implements ViUnSource<Long, Long, SqlConnection> {
 
     @Override
     public CompletableFuture<Void> reviveGraph(SqlConnection tx, String graphName) {
+        // TODO: graph revive needs to update all graph link's versions and graph metadata element version
         return toCf(setGraphTombstone(tx, graphName, false));
     }
 
